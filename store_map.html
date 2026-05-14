@@ -20,11 +20,128 @@
     canvas {
       display: block;
     }
+
+    /* UI 설정 패널 스타일 */
+    #ui-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 240px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 18px;
+      color: white;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      user-select: none;
+      z-index: 100;
+    }
+
+    .ui-group {
+      margin-bottom: 16px;
+    }
+
+    .ui-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .ui-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .ui-btn {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 6px;
+      padding: 8px;
+      color: white;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ui-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .ui-btn.active {
+      background: #ffff00;
+      color: black;
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #ffff00;
+      cursor: pointer;
+    }
+
+    .help-text {
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.5;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px;
+      border-radius: 6px;
+    }
   </style>
 </head>
 
 <body>
+  <div id="ui-panel">
+    <div class="ui-group">
+      <span class="ui-label">Movement Control</span>
+      <div class="ui-row">
+        <span style="font-size: 12px;">Speed</span>
+        <input type="range" id="speed-slider" min="0.05" max="0.5" step="0.01" value="0.2">
+      </div>
+    </div>
+
+    <div class="ui-group">
+      <span class="ui-label">Physics</span>
+      <div class="ui-row">
+        <button id="btn-collision" class="ui-btn active">Collision ON</button>
+        <button id="btn-reset" class="ui-btn">Reset Pos</button>
+      </div>
+    </div>
+
+    <div class="ui-group" style="margin-bottom: 0;">
+      <span class="ui-label">How to Move</span>
+      <div class="help-text">
+        ⌨️ <b>WASD</b> or <b>Arrows</b> to move<br>
+        🖱️ <b>Rotate/Zoom</b> is disabled for fixed top-view
+      </div>
+    </div>
+  </div>
+
   <script>
+    // ─── 전역 변수 ────────────────────────────────────────────────
+    let moveSpeed = 0.2;
+    let collisionEnabled = true;
+
+    // ─── UI 핸들러 ────────────────────────────────────────────────
+    document.getElementById('speed-slider').oninput = (e) => moveSpeed = parseFloat(e.target.value);
+    document.getElementById('btn-collision').onclick = (e) => {
+      collisionEnabled = !collisionEnabled;
+      e.target.innerText = collisionEnabled ? "Collision ON" : "Collision OFF";
+      e.target.classList.toggle('active');
+    };
+    document.getElementById('btn-reset').onclick = () => {
+      player.position.set(0, 0, 0);
+    };
+
     // ─── 씬 ───────────────────────────────────────────────────────
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0e1a);
@@ -109,7 +226,7 @@
         addEdges(new THREE.BoxGeometry(w, h, d), color, cx, h / 2, cz);
       }
     }
-    
+
     // ─── 충돌 전용 가상 벽 (보이지 않음) ──────────────────────────
     function collisionOnly(cx, cz, w, d, h = 3.0) {
       const box = new THREE.Box3(
@@ -222,11 +339,11 @@
     hanger(9.0, 0.7, 1.4, '바람막이', '#44bb88', true);
     hanger(14.0, 0.7, 1.5, '여성 이너웨어', '#dd6699', true);
     hanger(25.0, -9.5, 4.0, '쿨텐다드', '#aa66ff');
-    
+
     wall(24.0, -2.5, 6.0, 0.1, 3.0, 0xff0000);
     wall(24.0, 0.2, 6.0, 0.1, 3.0, 0xff0000);
     makeLabel('여성 BEST 셀러', 24.0, -1.15, '#ffffff', 1.8);
-    wall(23.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);  
+    wall(23.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);
     wall(25.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);
     {
       const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
@@ -328,10 +445,10 @@
     makeLabel('입구', 25.0, -16.0, '#ffff00', 4.0, 7.0, 1.8);
     makeLabel('입구', 31.0, -10.0, '#ffff00', 4.0, 7.0, 1.8);
     // 입구 회색 실선 (유리 및 외곽벽까지 연장) - 충돌 제외
-    wall(24.75, -16.1, 11.5, 0.05, 0.1, 0x888888, true, true); 
-    wall(30.5, -10.55, 0.05, 11.1, 0.1, 0x888888, true, true); 
+    wall(24.75, -16.1, 11.5, 0.05, 0.1, 0x888888, true, true);
+    wall(30.5, -10.55, 0.05, 11.1, 0.1, 0x888888, true, true);
     // 마네킹 공간 표시 및 라벨 - 충돌 제외
-    wall(30.5, -1.0, 0.05, 4.0, 0.1, 0x888888, true, true); 
+    wall(30.5, -1.0, 0.05, 4.0, 0.1, 0x888888, true, true);
     makeLabel('마네킹', 30.5, -1.0, '#ffff00', 4.0, 7.0, 1.8);
 
     // 반바지 - 창고 문 오른쪽 파란벽 아래 (반바지/카고팬츠와 동일한 선반 형태)
@@ -383,7 +500,7 @@
     ovalMirror(0.5, 2.3, 0.8, 0.8);
     ovalMirror(4.5, 2.3, 0.8, 0.8);
     ovalMirror(8.5, 2.3, 0.8, 0.8);
-    
+
     // 6, 8번째 위쪽
     ovalMirror(6.5, -0.9, 0.8, 0.8);
     ovalMirror(10.5, -0.9, 0.8, 0.8);
@@ -401,20 +518,36 @@
 
     // 조작 상태
     const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false };
-    window.addEventListener('keydown', (e) => { 
+    window.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
-      if (keys.hasOwnProperty(key)) keys[key] = true; 
+      if (keys.hasOwnProperty(key)) keys[key] = true;
     });
-    window.addEventListener('keyup', (e) => { 
+    window.addEventListener('keyup', (e) => {
       const key = e.key.toLowerCase();
-      if (keys.hasOwnProperty(key)) keys[key] = false; 
+      if (keys.hasOwnProperty(key)) keys[key] = false;
     });
 
-    // ─── 렌더 루프 ────────────────────────────────────────────────
-    const speed = 0.2;
+    // ─── 렌더 루프 및 조작 ────────────────────────────────────────
     const playerRadius = 0.4;
 
+    // UI 이벤트 리스너
+    document.getElementById('speed-slider').addEventListener('input', (e) => {
+      moveSpeed = parseFloat(e.target.value);
+    });
+
+    document.getElementById('btn-collision').addEventListener('click', (e) => {
+      collisionEnabled = !collisionEnabled;
+      e.target.textContent = collisionEnabled ? "Collision ON" : "Collision OFF";
+      e.target.className = collisionEnabled ? "ui-btn active" : "ui-btn";
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      player.position.set(25.0, 0.8, -14.0);
+    });
+
     function checkCollision(newX, newZ) {
+      if (!collisionEnabled) return false; // 고스트 모드
+
       const playerBox = new THREE.Box3(
         new THREE.Vector3(newX - playerRadius, 0, newZ - playerRadius),
         new THREE.Vector3(newX + playerRadius, 1.6, newZ + playerRadius)
@@ -433,16 +566,16 @@
       let nextZ = player.position.z;
 
       if (keys.w || keys.arrowup) {
-        if (!checkCollision(nextX, nextZ - speed)) nextZ -= speed;
+        if (!checkCollision(nextX, nextZ - moveSpeed)) nextZ -= moveSpeed;
       }
       if (keys.s || keys.arrowdown) {
-        if (!checkCollision(nextX, nextZ + speed)) nextZ += speed;
+        if (!checkCollision(nextX, nextZ + moveSpeed)) nextZ += moveSpeed;
       }
       if (keys.a || keys.arrowleft) {
-        if (!checkCollision(nextX - speed, nextZ)) nextX -= speed;
+        if (!checkCollision(nextX - moveSpeed, nextZ)) nextX -= moveSpeed;
       }
       if (keys.d || keys.arrowright) {
-        if (!checkCollision(nextX + speed, nextZ)) nextX += speed;
+        if (!checkCollision(nextX + moveSpeed, nextZ)) nextX += moveSpeed;
       }
 
       player.position.x = nextX;
