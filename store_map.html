@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <title>필스팀 매장 맵 v2 — Wireframe</title>
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0e1a;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <script>
+    // ─── 씬 ───────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0e1a);
+
+    // ─── 카메라 (정투영, 탑뷰 고정) ───────────────────────────────
+    const aspect = innerWidth / innerHeight;
+    const zoom = 22;
+    const cam = new THREE.OrthographicCamera(
+      -zoom * aspect, zoom * aspect,
+      zoom, -zoom, 0.1, 100
+    );
+    cam.position.set(0, 50, 0);
+    cam.lookAt(0, 0, 0);
+
+    // ─── 렌더러 ───────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    window.addEventListener('resize', () => {
+      const a = innerWidth / innerHeight;
+      renderer.setSize(innerWidth, innerHeight);
+      cam.left = -zoom * a;
+      cam.right = zoom * a;
+      cam.updateProjectionMatrix();
+    });
+
+    // ─── 라벨 스프라이트 ──────────────────────────────────────────
+    function makeLabel(text, x, z, colorHex = '#ffffff', yPos = 2.5, scaleW = 3.5, scaleH = 0.9) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256; canvas.height = 80;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, 256, 80);
+      ctx.fillStyle = colorHex;
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 128, 40);
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false })
+      );
+      sprite.position.set(x, yPos, z);
+      sprite.scale.set(scaleW, scaleH, 1);
+      scene.add(sprite);
+    }
+
+    // ─── 외곽선 헬퍼 ──────────────────────────────────────────────
+    function addEdges(geo, color, cx, cy, cz, rotX = 0, rotY = 0, rotZ = 0) {
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color })
+      );
+      edges.position.set(cx, cy, cz);
+      edges.rotation.set(rotX, rotY, rotZ);
+      scene.add(edges);
+    }
+
+    // ─── 벽 ──────────────────────────────────────────────────────
+    function wall(cx, cz, w, d, h = 3.0, color = 0x00f2ff, filled = false) {
+      // 빨간색(0xff0000 -> 0xcc0000로 보정)이거나 filled가 true인 경우 반투명 솔리드로 생성
+      const isRed = (color === 0xff0000 || color === 0xcc0000);
+      if (filled || isRed) {
+        const finalColor = isRed ? 0xcc0000 : color;
+        const material = new THREE.MeshBasicMaterial({ color: finalColor, transparent: true, opacity: 0.6 });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+        mesh.position.set(cx, h / 2, cz);
+        scene.add(mesh);
+      } else {
+        addEdges(new THREE.BoxGeometry(w, h, d), color, cx, h / 2, cz);
+      }
+    }
+
+    // ─── 유리 파사드 ──────────────────────────────────────────────
+    function glass(cx, cz, w, d) {
+      addEdges(new THREE.BoxGeometry(w, 3.0, d), 0x44ccff, cx, 1.5, cz);
+    }
+
+    // 바닥 외곽선 및 격자 삭제됨
+
+    // ─── 외벽 (피팅룸 공간 확보) ──────────────────────────────────
+    wall(-13.25, -4.0, 6.5, 0.3, 3.0, 0x00f2ff, true); // 좌측 벽 세그먼트 (피팅룸 쪽)
+    wall(-3.0, -4.0, 2.0, 0.3, 3.0, 0x00f2ff, true);   // 중간 파란 벽
+    wall(1.0, -4.0, 6.0, 0.3, 3.0, 0xff0000);         // 사이 공간 빨간 벽
+    wall(6.5, -4.0, 5.0, 0.3, 3.0, 0x00f2ff, true);    // 우측 파란 벽
+    // ─── 창고 사이드 기둥 벽 ────────────────────────────────────
+    wall(-2.0, -7.0, 0.3, 6.0, 3.0, 0xff0000);          // 좌측 레드 기둥 원상복구 (Z=-10.0)
+    wall(3.5, -10.0, 11.0, 0.3, 3.0, 0xff0000);       // 기둥 끝에서 우측 세로벽까지 잇는 가로벽 복구
+
+    // 피팅룸 사이드 빨간 벽 추가 (연장 및 두께 보강)
+    wall(-10.0, -6.5, 0.3, 5.0, 3.0, 0xff0000); // 피팅룸 왼쪽 벽
+    wall(-4.0, -6.5, 0.3, 5.0, 3.0, 0xff0000);  // 피팅룸 오른쪽 벽 복구 및 두께 보강
+    wall(-7.0, -9.0, 6.0, 0.3, 3.0, 0xff0000);  // 피팅룸 상단(뒷) 벽
+
+    // 개별 직사각형 피팅룸 (8개 독립 공간: 내부가 비어있는 4면 화이트 솔리드 벽)
+    function room(cx, cz, w, d) {
+      const t = 0.1; // 벽 두께
+      wall(cx, cz - d / 2, w, t, 2.0, 0xffffff, true); // 뒤
+      wall(cx, cz + d / 2, w, t, 2.0, 0xffffff, true); // 앞
+      wall(cx - w / 2, cz, t, d, 2.0, 0xffffff, true); // 왼쪽
+      wall(cx + w / 2, cz, t, d, 2.0, 0xffffff, true); // 오른쪽
+    }
+    const zPositions = [-8.4, -7.2, -6.0, -4.8];
+    zPositions.forEach(z => {
+      room(-9.4, z, 1.2, 1.0); // 왼쪽 열
+      room(-4.6, z, 1.2, 1.0); // 오른쪽 열
+    });
+    makeLabel('피팅룸', -7.0, -6.5, '#ffffff', 2.0);
+    wall(9.0, -10.0, 0.3, 12.0, 5.0, 0x00f2ff, true);   // 세로벽 (Z=-16.0까지)
+    glass(14.0, -16.0, 10, 0.3);                         // 유리 (Z=-16.0)
+    makeLabel('유리', 14.0, -16.5, '#ffffff', 2.0);
+    // 유리 아래 가로 빨간 벽 (전체적으로 아래로 이동)
+    wall(15.0, -13.0, 7.0, 0.1, 3.0, 0xff0000);
+    wall(15.0, -11.0, 7.0, 0.1, 3.0, 0xff0000);
+    // 큰 사각형 구조물 및 거울 추가
+    wall(15.0, -9.5, 7.0, 0.1, 3.0, 0xff0000);  // 사각형 상단
+    wall(15.0, -9.0, 7.0, 0.1, 3.0, 0xff0000);  // 사각형 내부 가로벽
+    piMirrorDown(15.0, -9.75, 3.0, 0.75);       // 사각형 상단 입체 거울
+    wall(11.5, -7.5, 0.1, 4.0, 3.0, 0xff0000);  // 왼쪽 세로벽
+    wall(18.5, -7.5, 0.1, 4.0, 3.0, 0xff0000);  // 오른쪽 세로벽
+    // 내부 작은 직사각형 (속이 비어있는 테두리 형태)
+    wall(15.0, -8.5, 2.5, 0.1, 3.0, 0xff0000); // 상단
+    wall(15.0, -7.5, 2.5, 0.1, 3.0, 0xff0000); // 하단
+    wall(13.75, -8.0, 0.1, 1.0, 3.0, 0xff0000); // 왼쪽
+    wall(16.25, -8.0, 0.1, 1.0, 3.0, 0xff0000); // 오른쪽
+    wall(15.0, -5.5, 7.0, 0.1, 3.0, 0xff0000);  // 하단 연결 가로벽
+    // 우측 외곽벽 (구멍을 위로 확장)
+    wall(30.5, -4.0, 0.3, 2.0, 3.0, 0x00f2ff, true);
+    wall(30.5, 3.0, 0.3, 4.0, 3.0, 0x00f2ff, true);
+    wall(-16.5, 7.0, 0.3, 22.0, 3.0, 0x00f2ff, true);
+    wall(-11.75, 18, 9.5, 0.3, 3.0, 0x00f2ff, true);
+    wall(13.5, 5.0, 34.0, 0.3, 3.0, 0x00f2ff, true);
+    wall(-7, 13.0, 0.3, 10.0, 3.0, 0x00f2ff, true);
+    wall(29.5, -15.5, 2.0, 1.2, 3.0, 0x999999);  // 기둥 조금 더 위로 (최종?)
+    // 총 9줄의 빨간색 세로벽 (시작점 X=-3.5, 간격 2.0, 총 9세트)
+    const redWallX = [-3.5, -1.5, 0.5, 2.5, 4.5, 6.5, 8.5, 10.5, 12.5];
+    redWallX.forEach(x => {
+      wall(x, -0.3, 0.1, 1.5, 3.0, 0xff0000); // 상단벽
+      wall(x, 1.7, 0.1, 1.5, 3.0, 0xff0000);  // 하단벽
+    });
+
+    // ─── 내부 구획벽 ─────────────────────────────────────────────
+    wall(-5.25, 8.0, 3.5, 0.2, 3.0, 0x00f2ff, true);  // 정장 아래 벽
+    wall(-3.5, 6.5, 0.2, 3.0, 3.0, 0x00f2ff, true);   // 정장 오른쪽 세로벽
+
+    // ─── 원형 행거 ────────────────────────────────────────────────
+    function hanger(cx, cz, radius, label, colorHex) {
+      addEdges(
+        new THREE.TorusGeometry(radius, 0.1, 8, 48),
+        new THREE.Color(colorHex),
+        cx, 1.5, cz,
+        Math.PI / 2
+      );
+      addEdges(new THREE.CylinderGeometry(0.08, 0.08, 1.5, 8), 0x666666, cx, 0.75, cz);
+      makeLabel(label, cx, cz, '#ffffff', 2.8);
+    }
+
+    hanger(-1.0, 0.7, 1.4, '여성바지', '#cc44aa');
+    hanger(4.0, 0.7, 1.4, '바지', '#4488cc');
+    hanger(9.0, 0.7, 1.4, '바람막이', '#44bb88');
+    hanger(14.0, 0.7, 1.5, '여성 이너웨어', '#dd6699');
+    hanger(25.0, -9.5, 4.0, '쿨텐다드', '#aa66ff');
+    mirror(9.5, -12.0, 3.0, 0x00ff00, false);  // 거울 위치 진짜 살짝 왼쪽으로 (X=9.5)
+    // 쿨텐다드 아래 가로 빨간 벽 (두께 0.1로 조정)
+    wall(24.0, -2.5, 6.0, 0.1, 3.0, 0xff0000);
+    wall(24.0, 0.2, 6.0, 0.1, 3.0, 0xff0000);
+    makeLabel('여성 BEST 셀러', 24.0, -1.15, '#ffffff', 1.8);
+    wall(23.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);  // 세로벽 두께 0.1로 조정
+    wall(25.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);
+    // 세로벽 아래 Π자 거울 (날개가 위로, 각 세로벽에 붙음)
+    {
+      const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      // 메인 가로판 (아래)
+      const main = new THREE.Mesh(new THREE.BoxGeometry(2.0, 3.0, 0.1), mat);
+      main.position.set(24.0, 1.5, 3.2);
+      scene.add(main);
+      // 왼쪽 날개 (위로, 왼쪽 세로벽에 닿음)
+      const left = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.4), mat);
+      left.position.set(23.0, 1.5, 3.0);
+      scene.add(left);
+      // 오른쪽 날개 (위로, 오른쪽 세로벽에 닿음)
+      const right = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.4), mat);
+      right.position.set(25.0, 1.5, 3.0);
+      scene.add(right);
+    }
+    hanger(-11.75, 14, 2.5, '남자 상의', '#4477cc');
+    hanger(-6.2, 6.5, 1.15, '정장', '#aa9966');
+
+    // ─── 진열대 / 선반 ────────────────────────────────────────────
+    function shelf(cx, cz, w, d, label, colorHex = '#336688') {
+      addEdges(new THREE.BoxGeometry(w, 1.0, d), new THREE.Color(colorHex), cx, 0.5, cz);
+      if (label) makeLabel(label, cx, cz, '#aaddff', 1.8);
+    }
+
+    shelf(-15.5, 0.0, 2.0, 5.0, '계산대', '#2a5a80');  // X=-16.5 벽 부착
+    shelf(-15.5, 6.5, 2.0, 6.0, '남성 이너웨어', '#2a4a70');  // X=-16.5 벽 부착
+
+    // ─── 상의(멘티) 빨간색 기둥 및 선반 구조 ────────────────────
+    wall(-12.5, 4.5, 0.1, 10.0, 1.5, 0xff0000); // 거울 왼쪽 세로
+    wall(-11.0, 4.5, 0.1, 10.0, 1.5, 0xff0000); // 거울 오른쪽 세로
+    // 오른쪽 기둥에서 오른쪽으로 뻗어나가는 가로 선반 3개 추가
+    wall(-9.5, 0.5, 3.0, 0.1, 1.5, 0xff0000);   // 가로 상단
+    wall(-9.5, 1.5, 3.0, 0.1, 1.5, 0xff0000);   // 가로 중단
+    wall(-9.5, 2.5, 3.0, 0.1, 1.5, 0xff0000);   // 가로 하단
+    makeLabel('상의(면티)', -9.5, 0.0, '#ff4444', 2.0);
+    // 반바지 구역 입체 거울 (Π자, 날개가 아래 방향)
+    function piMirrorDown(cx, cz, width = 2.0, depth = 0.5, color = 0x00ff00) {
+      const mat = new THREE.MeshBasicMaterial({ color: color });
+      // 메인 거울 (가로)
+      const main = new THREE.Mesh(new THREE.BoxGeometry(width, 3.0, 0.1), mat);
+      main.position.set(cx, 1.5, cz);
+      scene.add(main);
+      // 왼쪽 날개 (아래로)
+      const left = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, depth), mat);
+      left.position.set(cx - width / 2, 1.5, cz + depth / 2);
+      scene.add(left);
+      // 오른쪽 날개 (아래로)
+      const right = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, depth), mat);
+      right.position.set(cx + width / 2, 1.5, cz + depth / 2);
+      scene.add(right);
+    }
+
+    piMirrorDown(-0.5, 4.4, 2.5, 0.5);   // 반바지 왼쪽 입체 거울 (가로형)
+    shelf(5.0, 4.4, 3.5, 0.8, '반바지/카고팬츠', '#336688');
+    piMirrorDown(11.5, 4.4, 2.5, 0.5);  // 반바지 오른쪽 입체 거울 (가로형)
+
+    // ─── 거울 ─────────────────────────────────────────────────────
+    function mirror(cx, cz, depth = 1.5, color = 0x00ff00, wingRight = true) {
+      const material = new THREE.MeshBasicMaterial({ color: color });
+      const wingOffset = wingRight ? 0.25 : -0.25;
+
+      // 메인 거울
+      const mainMesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.0, depth), material);
+      mainMesh.position.set(cx, 1.0, cz);
+      scene.add(mainMesh);
+
+      // 상단 날개
+      const topWing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.0, 0.15), material);
+      topWing.position.set(cx + wingOffset, 1.0, cz - depth / 2);
+      scene.add(topWing);
+
+      // 하단 날개
+      const bottomWing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.0, 0.15), material);
+      bottomWing.position.set(cx + wingOffset, 1.0, cz + depth / 2);
+      scene.add(bottomWing);
+    }
+
+    mirror(9.5, -12.0, 3.0, 0x00ff00, false); // 상단 파란벽 입체 거울 (세로형)
+
+    mirror(-3.8, 6.5, 3.0);
+    // 파란색 외벽 부착 'Π'자 모양 입체 거울 (벽에 다리가 닿게 조정)
+    {
+      const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      // 메인 가로 판 (앞으로 튀어나옴)
+      const main = new THREE.Mesh(new THREE.BoxGeometry(2.0, 3.0, 0.1), mat);
+      main.position.set(-3.0, 1.5, -3.5);
+      scene.add(main);
+      // 왼쪽 날개 (벽까지 닿음)
+      const left = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.5), mat);
+      left.position.set(-4.0, 1.5, -3.75);
+      scene.add(left);
+      // 오른쪽 날개 (벽까지 닿음)
+      const right = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.5), mat);
+      right.position.set(-2.0, 1.5, -3.75);
+      scene.add(right);
+    }
+
+    makeLabel('창고', 3.5, -7.0, '#ffffff', 2.0);
+    makeLabel('창고 문', 2.0, -3.45, '#ffffff', 1.5);
+    makeLabel('입구', 25.0, -16.0, '#ffff00', 4.0, 7.0, 1.8);
+    makeLabel('입구', 31.0, -10.0, '#ffff00', 4.0, 7.0, 1.8);
+    // 입구 회색 실선 (유리 및 외곽벽까지 연장)
+    wall(24.75, -16.1, 11.5, 0.05, 0.1, 0x888888, true); // 가로선 연장
+    wall(30.5, -10.55, 0.05, 11.1, 0.1, 0x888888, true); // 세로선 연장
+    // 마네킹 공간 표시 및 라벨
+    wall(30.5, -1.0, 0.05, 4.0, 0.1, 0x888888, true); // 마네킹 자리 회색 선
+    makeLabel('마네킹', 30.5, -1.0, '#ffff00', 4.0, 7.0, 1.8);
+
+    // 창고 문 겸용 입체 거울 (문 역할 명시)
+    {
+      const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      // 메인 판
+      const main = new THREE.Mesh(new THREE.BoxGeometry(2.0, 3.0, 0.1), mat);
+      main.position.set(2.0, 1.5, -3.5);
+      scene.add(main);
+      // 왼쪽 날개
+      const left = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.5), mat);
+      left.position.set(1.0, 1.5, -3.75);
+      scene.add(left);
+      // 오른쪽 날개
+      const right = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.5), mat);
+      right.position.set(3.0, 1.5, -3.75);
+      scene.add(right);
+    }
+
+    // 남자 상의 왼쪽 — X=-16.0 벽 부착 세로 거울 (] 모양)
+    mirror(-16.0, 14.0, 4.5, 0x00ff00, false);
+
+    // ─── 타원형 거울 ─────────────────────────────────────────────
+    function ovalMirror(cx, cz, w, d, color = 0x00ff00) {
+      const geo = new THREE.CylinderGeometry(0.5, 0.5, 2.0, 32);
+      const mat = new THREE.MeshBasicMaterial({ color: color });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(cx, 1.0, cz);
+      mesh.scale.set(w, 1.0, d); // 타원형으로 스케일 조정
+      scene.add(mesh);
+    }
+
+    // ─── 가운데 거울 (도면의 초록색 타원) ─────────────────────────
+    ovalMirror(-11.75, 6.5, 0.15, 6.0);
+
+
+
+    // ─── 렌더 루프 ────────────────────────────────────────────────
+    (function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, cam);
+    })();
+  </script>
+</body>
+
+</html>
