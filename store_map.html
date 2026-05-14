@@ -83,8 +83,20 @@
       scene.add(edges);
     }
 
+    // ─── 벽 및 충돌 데이터 ────────────────────────────────────────
+    const walls = []; // 모든 벽의 충돌 박스를 저장
+
     // ─── 벽 ──────────────────────────────────────────────────────
-    function wall(cx, cz, w, d, h = 3.0, color = 0x00f2ff, filled = false) {
+    function wall(cx, cz, w, d, h = 3.0, color = 0x00f2ff, filled = false, noCollision = false) {
+      // 충돌 박스 저장 (AABB) - noCollision이 아닐 때만
+      if (!noCollision) {
+        const box = new THREE.Box3(
+          new THREE.Vector3(cx - w / 2, 0, cz - d / 2),
+          new THREE.Vector3(cx + w / 2, h, cz + d / 2)
+        );
+        walls.push(box);
+      }
+
       // 빨간색(0xff0000 -> 0xcc0000로 보정)이거나 filled가 true인 경우 반투명 솔리드로 생성
       const isRed = (color === 0xff0000 || color === 0xcc0000);
       if (filled || isRed) {
@@ -97,10 +109,25 @@
         addEdges(new THREE.BoxGeometry(w, h, d), color, cx, h / 2, cz);
       }
     }
+    
+    // ─── 충돌 전용 가상 벽 (보이지 않음) ──────────────────────────
+    function collisionOnly(cx, cz, w, d, h = 3.0) {
+      const box = new THREE.Box3(
+        new THREE.Vector3(cx - w / 2, 0, cz - d / 2),
+        new THREE.Vector3(cx + w / 2, h, cz + d / 2)
+      );
+      walls.push(box);
+    }
 
     // ─── 유리 파사드 ──────────────────────────────────────────────
     function glass(cx, cz, w, d) {
       addEdges(new THREE.BoxGeometry(w, 3.0, d), 0x44ccff, cx, 1.5, cz);
+      // 유리창 충돌 추가
+      const box = new THREE.Box3(
+        new THREE.Vector3(cx - w / 2, 0, cz - d / 2),
+        new THREE.Vector3(cx + w / 2, 3.0, cz + d / 2)
+      );
+      walls.push(box);
     }
 
     // 바닥 외곽선 및 격자 삭제됨
@@ -171,7 +198,7 @@
     wall(-3.5, 6.5, 0.2, 3.0, 3.0, 0x00f2ff, true);   // 정장 오른쪽 세로벽
 
     // ─── 원형 행거 ────────────────────────────────────────────────
-    function hanger(cx, cz, radius, label, colorHex) {
+    function hanger(cx, cz, radius, label, colorHex, noCollision = false) {
       addEdges(
         new THREE.TorusGeometry(radius, 0.1, 8, 48),
         new THREE.Color(colorHex),
@@ -180,32 +207,35 @@
       );
       addEdges(new THREE.CylinderGeometry(0.08, 0.08, 1.5, 8), 0x666666, cx, 0.75, cz);
       makeLabel(label, cx, cz, '#ffffff', 2.8);
+
+      if (!noCollision) {
+        const box = new THREE.Box3(
+          new THREE.Vector3(cx - radius, 0, cz - radius),
+          new THREE.Vector3(cx + radius, 2.0, cz + radius)
+        );
+        walls.push(box);
+      }
     }
 
-    hanger(-1.0, 0.7, 1.4, '여성바지', '#cc44aa');
-    hanger(4.0, 0.7, 1.4, '바지', '#4488cc');
-    hanger(9.0, 0.7, 1.4, '바람막이', '#44bb88');
-    hanger(14.0, 0.7, 1.5, '여성 이너웨어', '#dd6699');
+    hanger(-1.0, 0.7, 1.4, '여성바지', '#cc44aa', true);
+    hanger(4.0, 0.7, 1.4, '바지', '#4488cc', true);
+    hanger(9.0, 0.7, 1.4, '바람막이', '#44bb88', true);
+    hanger(14.0, 0.7, 1.5, '여성 이너웨어', '#dd6699', true);
     hanger(25.0, -9.5, 4.0, '쿨텐다드', '#aa66ff');
-    mirror(9.5, -12.0, 3.0, 0x00ff00, false);  // 거울 위치 진짜 살짝 왼쪽으로 (X=9.5)
-    // 쿨텐다드 아래 가로 빨간 벽 (두께 0.1로 조정)
+    
     wall(24.0, -2.5, 6.0, 0.1, 3.0, 0xff0000);
     wall(24.0, 0.2, 6.0, 0.1, 3.0, 0xff0000);
     makeLabel('여성 BEST 셀러', 24.0, -1.15, '#ffffff', 1.8);
-    wall(23.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);  // 세로벽 두께 0.1로 조정
+    wall(23.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);  
     wall(25.0, 1.8, 0.1, 2.0, 3.0, 0xff0000);
-    // 세로벽 아래 Π자 거울 (날개가 위로, 각 세로벽에 붙음)
     {
       const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      // 메인 가로판 (아래)
       const main = new THREE.Mesh(new THREE.BoxGeometry(2.0, 3.0, 0.1), mat);
       main.position.set(24.0, 1.5, 3.2);
       scene.add(main);
-      // 왼쪽 날개 (위로, 왼쪽 세로벽에 닿음)
       const left = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.4), mat);
       left.position.set(23.0, 1.5, 3.0);
       scene.add(left);
-      // 오른쪽 날개 (위로, 오른쪽 세로벽에 닿음)
       const right = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.0, 0.4), mat);
       right.position.set(25.0, 1.5, 3.0);
       scene.add(right);
@@ -215,12 +245,13 @@
 
     // ─── 진열대 / 선반 ────────────────────────────────────────────
     function shelf(cx, cz, w, d, label, colorHex = '#336688') {
-      addEdges(new THREE.BoxGeometry(w, 1.0, d), new THREE.Color(colorHex), cx, 0.5, cz);
+      wall(cx, cz, w, d, 1.0, parseInt(colorHex.replace('#', '0x')), true);
       if (label) makeLabel(label, cx, cz, '#aaddff', 1.8);
     }
 
-    shelf(-15.5, 0.0, 2.0, 5.0, '계산대', '#2a5a80');  // X=-16.5 벽 부착
-    shelf(-15.5, 6.5, 2.0, 6.0, '남성 이너웨어', '#2a4a70');  // X=-16.5 벽 부착
+    shelf(-15.5, -1.5, 2.0, 5.0, '계산대', '#2a5a80');
+    shelf(-15.5, 6.5, 2.0, 6.0, '남성 이너웨어', '#2a4a70');
+    shelf(5.0, 4.4, 3.5, 0.8, '반바지/카고팬츠', '#336688');
 
     // ─── 상의(멘티) 빨간색 기둥 및 선반 구조 ────────────────────
     wall(-12.5, 4.5, 0.1, 10.0, 1.5, 0xff0000); // 거울 왼쪽 세로
@@ -296,12 +327,15 @@
     makeLabel('창고 문', 2.0, -3.45, '#ffffff', 1.5);
     makeLabel('입구', 25.0, -16.0, '#ffff00', 4.0, 7.0, 1.8);
     makeLabel('입구', 31.0, -10.0, '#ffff00', 4.0, 7.0, 1.8);
-    // 입구 회색 실선 (유리 및 외곽벽까지 연장)
-    wall(24.75, -16.1, 11.5, 0.05, 0.1, 0x888888, true); // 가로선 연장
-    wall(30.5, -10.55, 0.05, 11.1, 0.1, 0x888888, true); // 세로선 연장
-    // 마네킹 공간 표시 및 라벨
-    wall(30.5, -1.0, 0.05, 4.0, 0.1, 0x888888, true); // 마네킹 자리 회색 선
+    // 입구 회색 실선 (유리 및 외곽벽까지 연장) - 충돌 제외
+    wall(24.75, -16.1, 11.5, 0.05, 0.1, 0x888888, true, true); 
+    wall(30.5, -10.55, 0.05, 11.1, 0.1, 0x888888, true, true); 
+    // 마네킹 공간 표시 및 라벨 - 충돌 제외
+    wall(30.5, -1.0, 0.05, 4.0, 0.1, 0x888888, true, true); 
     makeLabel('마네킹', 30.5, -1.0, '#ffff00', 4.0, 7.0, 1.8);
+
+    // 반바지 - 창고 문 오른쪽 파란벽 아래 (반바지/카고팬츠와 동일한 선반 형태)
+    shelf(6.0, -3.7, 3.5, 0.8, '반바지', '#336688');
 
     // 창고 문 겸용 입체 거울 (문 역할 명시)
     {
@@ -331,11 +365,31 @@
       mesh.position.set(cx, 1.0, cz);
       mesh.scale.set(w, 1.0, d); // 타원형으로 스케일 조정
       scene.add(mesh);
+
+      // 원형 집기 충돌 추가
+      const box = new THREE.Box3(
+        new THREE.Vector3(cx - w / 2, 0, cz - d / 2),
+        new THREE.Vector3(cx + w / 2, 2.0, cz + d / 2)
+      );
+      walls.push(box);
     }
 
     // ─── 가운데 거울 (도면의 초록색 타원) ─────────────────────────
     ovalMirror(-11.75, 6.5, 0.15, 6.0);
 
+    // ─── 상의/행거 구역 추가 원형 거울 (규칙에 따른 배치) ──────────
+    // 1, 3, 5, 7번째 아래쪽
+    ovalMirror(-3.5, 2.3, 0.8, 0.8);
+    ovalMirror(0.5, 2.3, 0.8, 0.8);
+    ovalMirror(4.5, 2.3, 0.8, 0.8);
+    ovalMirror(8.5, 2.3, 0.8, 0.8);
+    
+    // 6, 8번째 위쪽
+    ovalMirror(6.5, -0.9, 0.8, 0.8);
+    ovalMirror(10.5, -0.9, 0.8, 0.8);
+
+    // ─── 진입 금지 구역 (보이지 않는 충돌 벽) ─────────────────────
+    // 모든 진입 제한이 해제되었습니다.
 
 
     // ─── 플레이어 캐릭터 ──────────────────────────────────────────
@@ -358,14 +412,41 @@
 
     // ─── 렌더 루프 ────────────────────────────────────────────────
     const speed = 0.2;
+    const playerRadius = 0.4;
+
+    function checkCollision(newX, newZ) {
+      const playerBox = new THREE.Box3(
+        new THREE.Vector3(newX - playerRadius, 0, newZ - playerRadius),
+        new THREE.Vector3(newX + playerRadius, 1.6, newZ + playerRadius)
+      );
+      for (const wallBox of walls) {
+        if (playerBox.intersectsBox(wallBox)) return true;
+      }
+      return false;
+    }
+
     (function animate() {
       requestAnimationFrame(animate);
 
-      // 플레이어 이동 로직 (소문자로 통일)
-      if (keys.w || keys.arrowup) player.position.z -= speed;
-      if (keys.s || keys.arrowdown) player.position.z += speed;
-      if (keys.a || keys.arrowleft) player.position.x -= speed;
-      if (keys.d || keys.arrowright) player.position.x += speed;
+      // 플레이어 이동 로직 (충돌 감지 포함)
+      let nextX = player.position.x;
+      let nextZ = player.position.z;
+
+      if (keys.w || keys.arrowup) {
+        if (!checkCollision(nextX, nextZ - speed)) nextZ -= speed;
+      }
+      if (keys.s || keys.arrowdown) {
+        if (!checkCollision(nextX, nextZ + speed)) nextZ += speed;
+      }
+      if (keys.a || keys.arrowleft) {
+        if (!checkCollision(nextX - speed, nextZ)) nextX -= speed;
+      }
+      if (keys.d || keys.arrowright) {
+        if (!checkCollision(nextX + speed, nextZ)) nextX += speed;
+      }
+
+      player.position.x = nextX;
+      player.position.z = nextZ;
 
       // 카메라가 플레이어를 추적
       cam.position.x = player.position.x;
