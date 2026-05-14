@@ -338,9 +338,40 @@
 
 
 
+    // ─── 플레이어 캐릭터 ──────────────────────────────────────────
+    const playerGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.6, 16);
+    const playerMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const player = new THREE.Mesh(playerGeo, playerMat);
+    player.position.set(25.0, 0.8, -14.0); // 입구 근처 시작
+    scene.add(player);
+
+    // 조작 상태
+    const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false };
+    window.addEventListener('keydown', (e) => { 
+      const key = e.key.toLowerCase();
+      if (keys.hasOwnProperty(key)) keys[key] = true; 
+    });
+    window.addEventListener('keyup', (e) => { 
+      const key = e.key.toLowerCase();
+      if (keys.hasOwnProperty(key)) keys[key] = false; 
+    });
+
     // ─── 렌더 루프 ────────────────────────────────────────────────
+    const speed = 0.2;
     (function animate() {
       requestAnimationFrame(animate);
+
+      // 플레이어 이동 로직 (소문자로 통일)
+      if (keys.w || keys.arrowup) player.position.z -= speed;
+      if (keys.s || keys.arrowdown) player.position.z += speed;
+      if (keys.a || keys.arrowleft) player.position.x -= speed;
+      if (keys.d || keys.arrowright) player.position.x += speed;
+
+      // 카메라가 플레이어를 추적
+      cam.position.x = player.position.x;
+      cam.position.z = player.position.z;
+      cam.lookAt(player.position.x, 0, player.position.z);
+
       renderer.render(scene, cam);
     })();
   </script>
